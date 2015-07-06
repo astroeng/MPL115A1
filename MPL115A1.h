@@ -47,10 +47,7 @@ public:
   
   void start_conversion();
   void read_conversion();
-  void read_conversion_int();
   
-  void select_device();
-  void deselect_device();
   
   int getPressure();
   int getTemperature();
@@ -72,11 +69,11 @@ private:
                  */
   
   /* The datasheet for the part describes how these values are
-   stored on the device. For the purpose of this library the
-   values will be stored so that any "unused" bits are at the
-   most significant bit end of the value. This is different 
-   than the internal storage on the device but it will make
-   the code simpler for the microcontroller.
+     stored on the device. For the purpose of this library the
+     values will be stored so that any "unused" bits are at the
+     most significant bit end of the value. This is different 
+     than the internal storage on the device but it will make
+     the code simpler for the microcontroller.
    */  
   
   unsigned int Tadc; /* 10 bit value */
@@ -87,12 +84,15 @@ private:
   int b2_int;
   int c12_int;
   
-  double a0_coeff;  /* 16 bit value */
-  double b1_coeff;  /* 16 bit value */
-  double b2_coeff;  /* 16 bit value */
-  double c12_coeff; /* 14 bit value */
+  double a0_coeff;  /* 16 bit value 3 fraction bits */
+  double b1_coeff;  /* 16 bit value 12 fraction bits */
+  double b2_coeff;  /* 16 bit value 13 fraction bits */
+  double c12_coeff; /* 14 bit value all fraction bits with 9 padded 0s effectivly 10 ^ -9 */
   
-  unsigned char serialIO(unsigned char output);
+  void select_device();
+  void deselect_device();  
+  
+  unsigned char _SPI_IO(unsigned char output);
 
 };
 
