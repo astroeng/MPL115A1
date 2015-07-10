@@ -58,10 +58,10 @@ MPL115A1_Class::MPL115A1_Class(int data_in_pin,
   c12_int   = c12_int >> 2;
   c12_coeff = c12_int / 4194304.0; /* 2 ^ 22 */
   
-  Serial.println(a0_coeff,HEX);
-  Serial.println(b1_coeff,HEX);
-  Serial.println(b2_coeff,HEX);
-  Serial.println(c12_coeff,HEX);
+  Serial.println(a0_coeff,  HEX);
+  Serial.println(b1_coeff,  HEX);
+  Serial.println(b2_coeff,  HEX);
+  Serial.println(c12_coeff, HEX);
   
 }
 
@@ -92,8 +92,8 @@ void MPL115A1_Class::read_conversion()
   select_device();
   
   /* Send the addresses that will be returned in the
-     subsequent exhchange. The last "send" is only 
-     needed to get the previous responce.
+     subsequent exchange. The last "send" is only 
+     needed to get the previous response.
    */
   (data_addresses[0]);
   temp_read[0] = _SPI_IO(data_addresses[1]);
@@ -143,7 +143,7 @@ void MPL115A1_Class::deselect_device()
 }
 
 /* This function will use the values read from the device and perform the
-   corrections specified in the datasheet. This is done in float space for
+   corrections specified in the data sheet. This is done in float space for
    simplicity and certainly not speed.
  */
 
@@ -161,8 +161,8 @@ int MPL115A1_Class::getPressure()
   return return_value;
 }
 
-/* This fuction will use the values read from the device and perform a
-   correction that is derived from information in the datasheet. There 
+/* This function will use the values read from the device and perform a
+   correction that is derived from information in the data sheet. There 
    is no specified temperature accuracy and it can be quite far off.
    Need to look more into how this would be calibrated.
  */
@@ -175,7 +175,7 @@ int MPL115A1_Class::getTemperature()
 /* This function will read and write to the SPI bus. It is intended
    to be called within a select_device and deselect_device block of
    code. Those functions have the job of waking up and selecting the
-   device that this class is instansiated against.
+   device that this class is instantiated against.
  */
 
 unsigned char MPL115A1_Class::_SPI_IO(unsigned char output)
@@ -222,8 +222,8 @@ unsigned char MPL115A1_Class::_SPI_IO(unsigned char output)
     delay_clk();
     digitalWrite(_data_out_pin,0);
   
-    /* The slave device can also be outputing data while the
-       uController is outputing data and clock pulses So, shift 
+    /* The slave device can also be outputting data while the
+       uController is outputting data and clock pulses So, shift 
        the input value and read a new bit into the LSB of the 
        input value.
      */
