@@ -2,49 +2,58 @@
 #include <MPL115A1.h>
 #include <Arduino.h>
 
+#define delay_device() delayMicroseconds(40)
+#define MPL115A1_READ_DELAY_TIME 10
 
-#define delay_clk() delayMicroseconds(40); //__asm__("nop\n\t")
-#define delay_device() delayMicroseconds(40); //__asm__("nop\n\t""nop\n\t")
 
-MPL115A1_Class::MPL115A1_Class(int data_in_pin, 
-                               int data_out_pin, 
-                               int data_clock_pin, 
-                               int select_pin, 
-                               int shutdown_pin)
+typedef enum MPL115A1_State
 {
-  int i;
-  unsigned char calibration_data[8];
-  
-  _data_in_pin    = data_in_pin;
-  _data_out_pin   = data_out_pin;
-  _data_clock_pin = data_clock_pin;
+  StartConversion,
+  WaitToRead,
+  ReadConversion,
+};
+
+MPL115A1::MPL115A1(Software_SPI* bus, 
+                   int select_pin, 
+                   int shutdown_pin)
+{
+
+  _bus            = bus;
   _select_pin     = select_pin;
   _shutdown_pin   = shutdown_pin;
   
-  pinMode(_data_in_pin,    INPUT);
-  pinMode(_data_out_pin,   OUTPUT);
-  pinMode(_data_clock_pin, OUTPUT);
+  startConvertTime = 0;
+  runState = StartConversion;
+  
+}
+
+MPL115A1::~MPL115A1()
+{
+
+}
+
+char MPL115A1::begin()
+{
+  int i;
+  unsigned char calibration_data[8];  
+  
   pinMode(_select_pin,     OUTPUT);
   pinMode(_shutdown_pin,   OUTPUT);
   
   digitalWrite(_shutdown_pin, 1);
   
   /* The calibration data for the device needs to be read 
-     and saved.
+   and saved.
    */
   
   select_device();
   
   for (i = 0; i < 8; i++)
   {
-    _SPI_IO(calibration_addresses[i]);
-    calibration_data[i] = _SPI_IO(0x00);
-    
-    Serial.print(calibration_addresses[i], HEX);
-    Serial.print(", ");
-    Serial.println(calibration_data[i], HEX);
+    _bus->SPI_Send_Receive(calibration_addresses[i]);
+    calibration_data[i] = _bus->SPI_Send_Receive(0x00);
   }
-  _SPI_IO(0x00);
+  _bus->SPI_Send_Receive(0x00);
   
   deselect_device();
   
@@ -58,32 +67,54 @@ MPL115A1_Class::MPL115A1_Class(int data_in_pin,
   c12_int   = c12_int >> 2;
   c12_coeff = c12_int / 4194304.0; /* 2 ^ 22 */
   
-  Serial.println(a0_coeff,  HEX);
-  Serial.println(b1_coeff,  HEX);
-  Serial.println(b2_coeff,  HEX);
-  Serial.println(c12_coeff, HEX);
-  
+  return 0;
 }
 
-
-MPL115A1_Class::~MPL115A1_Class()
+void MPL115A1::run()
 {
-
+  switch (runState)
+  {
+    case StartConversion:
+      startConvertTime = millis();
+      start_conversion();
+      break;
+    case ReadConversion:
+      read_conversion();
+      break;
+    default:
+      break;
+  }
+  
+  switch (runState)
+  {
+    case StartConversion:
+      runState = WaitToRead;
+      break;
+    case WaitToRead:
+      if (startConvertTime + MPL115A1_READ_DELAY_TIME < millis())
+      {
+        runState = ReadConversion;
+      }
+      break;
+    case ReadConversion:
+      runState = StartConversion;
+      break;
+  }
 }
 
-void MPL115A1_Class::start_conversion()
+void MPL115A1::start_conversion()
 {
   select_device();
   
-  _SPI_IO(START_CONVERSION);
-  _SPI_IO(0x00);
+  _bus->SPI_Send_Receive(START_CONVERSION);
+  _bus->SPI_Send_Receive(0x00);
   
   deselect_device();
   
 }
 
 
-void MPL115A1_Class::read_conversion()
+void MPL115A1::read_conversion()
 {
   int i;
 
@@ -95,11 +126,11 @@ void MPL115A1_Class::read_conversion()
      subsequent exchange. The last "send" is only 
      needed to get the previous response.
    */
-  (data_addresses[0]);
-  temp_read[0] = _SPI_IO(data_addresses[1]);
-  temp_read[1] = _SPI_IO(data_addresses[2]);
-  temp_read[2] = _SPI_IO(data_addresses[3]);
-  temp_read[3] = _SPI_IO(0x00);
+  _bus->SPI_Send_Receive(data_addresses[0]);
+  temp_read[0] = _bus->SPI_Send_Receive(data_addresses[1]);
+  temp_read[1] = _bus->SPI_Send_Receive(data_addresses[2]);
+  temp_read[2] = _bus->SPI_Send_Receive(data_addresses[3]);
+  temp_read[3] = _bus->SPI_Send_Receive(0x00);
 
   Tadc = (temp_read[2] << 8) | temp_read[3];
   Tadc = (Tadc >> 6) & 0x03FF;
@@ -111,13 +142,13 @@ void MPL115A1_Class::read_conversion()
 
 }
 
-void MPL115A1_Class::select_device()
+void MPL115A1::select_device()
 {
   /* Set the clock pin low and then wait the needed amount
      of time before selecting the chip.
    */
 
-  digitalWrite(_data_clock_pin,0);
+  _bus->reset();
   
   delay_device();
 
@@ -127,18 +158,18 @@ void MPL115A1_Class::select_device()
 
 }
 
-void MPL115A1_Class::deselect_device()
+void MPL115A1::deselect_device()
 {
 
   /* Set the clock pin low and then wait the needed amount of
      time before deselecting the chip.
    */
-  digitalWrite(_data_clock_pin,0);
+  _bus->reset();
   
   delay_device();
   
   digitalWrite(_select_pin,1);
-  digitalWrite(_data_out_pin, 0);
+
 
 }
 
@@ -147,7 +178,7 @@ void MPL115A1_Class::deselect_device()
    simplicity and certainly not speed.
  */
 
-int MPL115A1_Class::getPressure()
+long MPL115A1::getPressure()
 {
   double offset_a = (115.0 - 50.0) / 1023.0;
   double offset_y = 50.0;
@@ -156,7 +187,7 @@ int MPL115A1_Class::getPressure()
   
   pressure = (Pcomp * offset_a) + offset_y;
   
-  int return_value = (int)(pressure * 100.0);
+  long return_value = (pressure * 1000.0);
   
   return return_value;
 }
@@ -167,90 +198,7 @@ int MPL115A1_Class::getPressure()
    Need to look more into how this would be calibrated.
  */
 
-int MPL115A1_Class::getTemperature()
+int MPL115A1::getTemperature()
 {
-  return (int)((25.0 + ((double)Tadc - 472.0) / -5.35)*100.0);
+  return (int)((25.0 + ((double)Tadc - 514.0) / -5.35)*10.0);
 }
-
-/* This function will read and write to the SPI bus. It is intended
-   to be called within a select_device and deselect_device block of
-   code. Those functions have the job of waking up and selecting the
-   device that this class is instantiated against.
- */
-
-unsigned char MPL115A1_Class::_SPI_IO(unsigned char output)
-{
-  int i = 0;
-  
-  unsigned char input_read   = 0;
-  unsigned char output_write = 0;
-  unsigned char input        = 0;
-  
-  for (i = 0; i < 8; i++)
-  {
-    /* Set the data output pin and wait 62.5ns. The data
-       sheet says 30ns is required but the smallest time
-       measurable on the microcontroller is 62.5ns.
-     
-       So, using 62.5ns does not work at all... I do not have
-       a scope so I can only guess as to what is going on.
-       Using a longer delay of around 40us seems to be 
-       about as fast as the bus can be clocked. This might
-       be the breadboard or the wires between the breadboard
-       and the Arduino, or something else completely. Maybe 
-       this will inspire the purchase of a oscilloscope.
-     */
-    
-    /* MSB first */
-    output_write = (output & 0x80) > 0 ? 1 : 0;
-    output = output << 1;
-    
-    /* LSB first
-    output_write = (output & 0x01) > 0 ? 1 : 0;
-    output = output >> 1;
-    */
-    
-    digitalWrite(_data_out_pin, output_write);
-    
-    delay_clk();
-    
-    /* Set the clock pin high and wait the required amount
-       of time for clock high. The datasheet says the clock
-       high time is 62.5ns.
-     */
-    digitalWrite(_data_clock_pin, 1);
-    delay_clk();
-    digitalWrite(_data_out_pin,0);
-  
-    /* The slave device can also be outputting data while the
-       uController is outputting data and clock pulses So, shift 
-       the input value and read a new bit into the LSB of the 
-       input value.
-     */
-    input = input << 1;
-    input_read = digitalRead(_data_in_pin);
-    input = input | (input_read & 0x01);
-
-    /* Set the clock pin low and wait the needed amount of
-     time for the device output to stabilize.
-     The data sheet specifies this as 30ns but the smallest
-     amount of time measurable is 62.5ns.
-     */
-    digitalWrite(_data_clock_pin, 0);
-    
-    /* I think this delay can be removed. Need to experiment
-       with this not here and see what happens.
-     */
-    delay_clk();
-
-
-  }
-  
-  
-  
-  return input;
-  
-}
-
-
-

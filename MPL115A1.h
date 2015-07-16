@@ -1,6 +1,7 @@
-
 #ifndef MPL115A1_H
 #define MPL115A1_H
+
+#include <software_spi.h>
 
 #define CONVERSION_WAIT_TIME_MS       3
 
@@ -34,29 +35,25 @@ static const unsigned char data_addresses[] = {READ_PRESSURE_HIGH_BYTE,
                                                READ_TEMPERATURE_HIGH_BYTE,
                                                READ_TEMPERATURE_LOW_BYTE};
 
-class MPL115A1_Class
+class MPL115A1
 {
 public:
-  MPL115A1_Class(int data_in_pin, 
-                 int data_out_pin, 
-                 int data_clock_pin, 
-                 int select_pin, 
-                 int shutdown_pin);
+  MPL115A1(Software_SPI* bus, 
+           int select_pin, 
+           int shutdown_pin);  
+  
+  ~MPL115A1();
+  
+  char begin();
+  void run();
 
-  ~MPL115A1_Class();
-  
-  void start_conversion();
-  void read_conversion();
-  
-  
-  int getPressure();
+  long getPressure();
   int getTemperature();
   
 private:
   
-  int _data_in_pin;
-  int _data_out_pin;
-  int _data_clock_pin;
+  Software_SPI * _bus;
+  
   int _select_pin;
   int _shutdown_pin;
   
@@ -79,20 +76,24 @@ private:
   unsigned int Tadc; /* 10 bit value */
   unsigned int Padc; /* 10 bit value */
   
-  int a0_int;
-  int b1_int;
-  int b2_int;
-  int c12_int;
+  long a0_int;
+  long b1_int;
+  long b2_int;
+  long c12_int;
   
   double a0_coeff;  /* 16 bit value 3 fraction bits */
   double b1_coeff;  /* 16 bit value 12 fraction bits */
   double b2_coeff;  /* 16 bit value 13 fraction bits */
   double c12_coeff; /* 14 bit value all fraction bits with 9 padded 0s effectivly 10 ^ -9 */
   
-  void select_device();
-  void deselect_device();  
+  unsigned long startConvertTime;
+  int runState;
   
-  unsigned char _SPI_IO(unsigned char output);
+  void select_device();
+  void deselect_device(); 
+
+  void start_conversion();
+  void read_conversion();
 
 };
 
